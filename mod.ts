@@ -99,7 +99,9 @@ class Chat {
     }))
   }
   async generate(messages: Message | Message[]): Promise<string> {
-    const req = this.#createRequest([...this.#history, ...(Array.isArray(messages) ? messages : [messages]),])
+    const newMessages = Array.isArray(messages) ? messages : [messages]
+    this.#history.push(...newMessages)
+    const req = this.#createRequest(this.#history)
     const body = await fetch(req).then(res => res.body)
     if (!body) { throw new Error('Response body is null.') }
 
@@ -110,7 +112,9 @@ class Chat {
     return generated
   }
   async * generateWithStream(messages: Message | Message[]): AsyncGenerator<string, void, unknown> {
-    const req = this.#createRequest([...this.#history, ...(Array.isArray(messages) ? messages : [messages]),])
+    const newMessages = Array.isArray(messages) ? messages : [messages]
+    this.#history.push(...newMessages)
+    const req = this.#createRequest(this.#history)
     const body = await fetch(req).then(res => res.body)
     if (!body) { throw new Error('Response body is null.') }
 
