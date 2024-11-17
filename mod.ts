@@ -102,7 +102,12 @@ class Chat {
     const req = this.#createRequest([...this.#history, ...(Array.isArray(messages) ? messages : [messages]),])
     const body = await fetch(req).then(res => res.body)
     if (!body) { throw new Error('Response body is null.') }
-    return await new Response(this.#formatResponse(body)).text()
+
+    let generated = ''
+    for await (const chunk of this.#formatResponse(body)) {
+      generated += chunk
+    }
+    return generated
   }
   async * generateWithStream(messages: Message | Message[]): AsyncGenerator<string, void, unknown> {
     const req = this.#createRequest([...this.#history, ...(Array.isArray(messages) ? messages : [messages]),])
