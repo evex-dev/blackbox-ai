@@ -24,7 +24,7 @@ export interface ChatInit {
  * Message
  */
 export type Message = {
-  role: 'user'
+  role: 'user' | 'assistant'
   content: string
   data?: {
     /**
