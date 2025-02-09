@@ -173,6 +173,13 @@ export interface GenerationConfig {
 export interface Message {
   content: string
   role: 'user' | 'assistant'
+  data?: {
+    imagesData?: {
+      filePath: string
+      /** Base64 URL */
+      contents: string
+    }[]
+  }
 }
 
 /**
@@ -181,7 +188,10 @@ export interface Message {
  * @param messages messages
  * @returns ReadableStream that streams string
  */
-export const generate = async (config: GenerationConfig, messages: Message[]): Promise<ReadableStream<string>> => {
+export const generate = async (
+  config: GenerationConfig,
+  messages: Message[],
+): Promise<ReadableStream<string>> => {
   const model = typeof config.model === 'string'
     ? MODELS[config.model]
     : config.model
@@ -193,6 +203,11 @@ export const generate = async (config: GenerationConfig, messages: Message[]): P
       id: i === 0 ? firstMessageId : generateId(),
       role: message.role,
       content: message.content,
+      data: message.data ? {
+        imagesData: message.data.imagesData ?? [],
+        fileText: '',
+        title: ''
+      } : null
     })),
     agentMode: {
       'mode': true,
@@ -262,7 +277,7 @@ export const generate = async (config: GenerationConfig, messages: Message[]): P
  * const chat = new Chat({
  *   model: 'gemini-2.0-flash'
  * })
- * 
+ *
  * await chat.send({ role: 'user', content: 'aaa' })
  * await chat.sendStream({ role: 'user', content: 'aaa' })
  * ```
@@ -275,11 +290,14 @@ export class Chat {
     this.messages = initialMessages
   }
 
-  async * sendStream(message: Message | Message[], generationConfig?: GenerationConfig): AsyncGenerator<string, void, unknown> {
+  async *sendStream(
+    message: Message | Message[],
+    generationConfig?: GenerationConfig,
+  ): AsyncGenerator<string, void, unknown> {
     this.messages = this.messages.concat(message)
     const config = {
       ...this.#config,
-      ...generationConfig
+      ...generationConfig,
     }
     const stream = (await generate(config, this.messages)).getReader()
     while (true) {
@@ -292,7 +310,10 @@ export class Chat {
       }
     }
   }
-  async send(message: Message | Message[], generationConfig?: GenerationConfig): Promise<string> {
+  async send(
+    message: Message | Message[],
+    generationConfig?: GenerationConfig,
+  ): Promise<string> {
     let result = ''
     for await (const chunk of this.sendStream(message, generationConfig)) {
       result += chunk

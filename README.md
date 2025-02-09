@@ -21,7 +21,7 @@ import { generate } from '@evex/blackbox-ai'
 
 const stream = await generate({ model: 'deepseek-v3' }, [{
   role: 'user',
-  content: 'Hi, who are you'
+  content: 'Hi, who are you',
 }])
 for await (const chunk of stream) {
   console.log(chunk)
