@@ -1,146 +1,302 @@
 /**
- * @module
  * @example
  * ```ts
- * import { BlackboxAI } from '@evex/blackbox-ai'
+ * import { generate } from '@evex/blackbox-ai'
  * ```
+ * @module
  */
 
-/**
- * Client options
- */
-export interface Init {
-  modelName: 'gpt-4o' | 'claude-sonnet-3.5' | 'gemini-pro' | 'blackboxai'
+const BASE_HEADERS = {
+  Origin: 'https://www.blackbox.ai',
+  Referer: 'https://www.blackbox.ai',
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Accept-Language': 'ja',
+  'Sec-Fetch-Dest': 'empty',
+  'Sec-Fetch-Mode': 'cors',
+  'Sec-Fetch-Site': 'same-origin',
+}
+
+function generateId(): string {
+  const characters =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+
+  for (let i = 0; i < 7; i++) {
+    const randomIndex = Math.floor(Math.random() * characters.length)
+    result += characters[randomIndex]
+  }
+
+  return result
+}
+
+/*export */ const createSession = async () => {
+  const res = await fetch('https://www.blackbox.ai', {
+    headers: {
+      ...BASE_HEADERS,
+    },
+  })
+  const sessionId = res.headers.getSetCookie().find((v) =>
+    v.startsWith('sessionId')
+  )?.match(/.{8}-.{4}-.{4}-.{4}-.{12}/)?.[0]
+  if (!sessionId) {
+    throw new Error('Failed to get session id')
+  }
+  /*await fetch('https://www.useblackbox.io/tlm', {
+    method: 'POST',
+    headers: {
+      ...BASE_HEADERS,
+      'Content-Type': 'application/json',
+      Cookie: `sessionId=${sessionId}`,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      userId: sessionId,
+      eventName: 'page visit',
+      eventMetadata: {
+        tag: 'web',
+        referrer: 'https://www.blackbox.ai/?model=DeepSeek-R1',
+      },
+    }),
+  })*/
+  await fetch('https://www.blackbox.ai/api/auth/session', {
+    headers: {
+      ...BASE_HEADERS,
+      'Content-Type': 'application/json',
+      Cookie: `sessionId=${sessionId}`,
+    },
+  }).then((res) => res.text()) //.then(console.log)
+  return sessionId
 }
 
 /**
- * Chat Init
+ * Custom model types
  */
-export interface ChatInit {
-  history?: Message[]
+export interface Model {
+  id: string
+  name: string
+}
+/**
+ * Model names you can use
+ */
+export type AvailableModel =
+  | 'deepseek-r1'
+  | 'deepseek-v3'
+  | 'gemini-2.0-flash'
+  | 'llama-3.3-70b-instruct-turbo'
+  | 'mistral-small-24b-instruct-2501'
+  | 'deepseek-llm-67b-chat'
+  | 'dbrx-instruct'
+  | 'QwQ-32B-Preview'
+  | 'Nous-Hermes-2-Mixtral-8x7B-DPO'
+
+const MODELS: Record<AvailableModel, Model> = {
+  'deepseek-r1': {
+    id: 'deepseek-reasoner',
+    name: 'DeepSeek-R1',
+  },
+  'deepseek-v3': {
+    id: 'deepseek-chat',
+    name: 'DeepSeek-V3',
+  },
+  'gemini-2.0-flash': {
+    id: 'Gemini/Gemini-Flash-2.0',
+    name: 'Gemini-Flash-2.0',
+  },
+  'llama-3.3-70b-instruct-turbo': {
+    id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+    name: 'Meta-Llama-3.3-70B-Instruct-Turbo',
+  },
+  'mistral-small-24b-instruct-2501': {
+    id: 'mistralai/Mistral-Small-24B-Instruct-2501',
+    name: 'Mistral-Small-24B-Instruct-2501',
+  },
+  'deepseek-llm-67b-chat': {
+    id: 'deepseek-ai/deepseek-llm-67b-chat',
+    name: 'DeepSeek-LLM-Chat-(67B)',
+  },
+  'dbrx-instruct': {
+    id: 'databricks/dbrx-instruct',
+    name: 'DBRX-Instruct',
+  },
+  'QwQ-32B-Preview': {
+    id: 'Qwen/QwQ-32B-Preview',
+    name: 'Qwen-QwQ-32B-Preview',
+  },
+  'Nous-Hermes-2-Mixtral-8x7B-DPO': {
+    id: 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO',
+    name: 'Nous-Hermes-2-Mixtral-8x7B-DPO',
+  },
+}
+
+/**
+ * Config for generating
+ */
+export interface GenerationConfig {
+  /**
+   * Model name or custom model definition
+   */
+  model: AvailableModel | Model
+
+  /**
+   * A custom fetch function that you can set.
+   * @default `globalThis.fetch`
+   */
+  fetch?: (req: Request) => Promise<Response>
+
+  /**
+   * Max output tokens
+   * @default 1024
+   */
+  maxTokens?: number
+
+  /**
+   * System prompt
+   */
+  systemPrompt?: string
+
+  /**
+   * Temperature
+   */
+  temperature?: string
+
+  /**
+   * topP
+   */
+  topP?: number
 }
 
 /**
  * Message
  */
-export type Message = {
-  role: 'user' | 'assistant'
+export interface Message {
   content: string
-  data?: {
-    /**
-     * Base64 URL
-     */
-    imageBase64: string
-  }
-}
-
-class Chat {
-  #history: Message[]
-  #id: string
-  #core: BlackboxAI
-  constructor(core: BlackboxAI, init: ChatInit) {
-    this.#core = core
-    this.#history = init.history ?? []
-    this.#id = crypto.randomUUID()
-  }
-  #createRequest(messages: Message[]) {
-    const json = {
-      messages: messages.map(message => ({ ...message, id: this.#id })),
-      id: this.#id,
-      previewToken: null,
-      userId: null,
-      codeModelMode: true,
-      agentMode: {},
-      trendingAgentMode: {},
-      isMicMode: false,
-      userSystemPrompt: null,
-      maxTokens: 1024,
-      playgroundTopP: 0.9,
-      playgroundTemperature: 0.5,
-      isChromeExt: false,
-      githubToken: null,
-      clickedAnswer2: false,
-      clickedAnswer3: false,
-      clickedForceWebSearch: false,
-      visitFromDelta: false,
-      mobileClient: false,
-      userSelectedModel: this.#core.init.modelName
-    }
-    return new Request('https://www.blackbox.ai/api/chat', {
-      body: JSON.stringify(json),
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      method: 'POST'
-    })
-  }
-  #formatResponse(body: ReadableStream<Uint8Array>) {
-    let newLines = 0
-    return body.pipeThrough(new TextDecoderStream()).pipeThrough(new TransformStream<string>({
-      transform(chunk, ctrler) {
-        if (newLines === 2) {
-          return ctrler.enqueue(chunk)
-        }
-        let resultI
-        for (let i = 0; i < chunk.length; i++) {
-          const char = chunk[i]
-          if (char === '\n') {
-            newLines++
-          }
-          if (newLines === 2) {
-            resultI = i
-            break
-          }
-        }
-        if (resultI) {
-          ctrler.enqueue(chunk.slice(resultI + 1))
-        }
-      }
-    }))
-  }
-  async generate(messages: Message | Message[]): Promise<string> {
-    const newMessages = Array.isArray(messages) ? messages : [messages]
-    this.#history.push(...newMessages)
-    const req = this.#createRequest(this.#history)
-    const body = await fetch(req).then(res => res.body)
-    if (!body) { throw new Error('Response body is null.') }
-
-    let generated = ''
-    for await (const chunk of this.#formatResponse(body)) {
-      generated += chunk
-    }
-    return generated
-  }
-  async * generateWithStream(messages: Message | Message[]): AsyncGenerator<string, void, unknown> {
-    const newMessages = Array.isArray(messages) ? messages : [messages]
-    this.#history.push(...newMessages)
-    const req = this.#createRequest(this.#history)
-    const body = await fetch(req).then(res => res.body)
-    if (!body) { throw new Error('Response body is null.') }
-
-    const stream = this.#formatResponse(body)
-    const reader = stream.getReader()
-    while (true) {
-      const { value, done } = await reader.read()
-      if (value) {
-        yield value as string
-      }
-      if (done) {
-        return
-      }
-    }
-  }
+  role: 'user' | 'assistant'
 }
 
 /**
- * Main class
+ * Generate a content
+ * @param config A config for generating
+ * @param messages messages
+ * @returns ReadableStream that streams string
  */
-export class BlackboxAI {
-  readonly init: Init
-  constructor(init: Init) {
-    this.init = init
+export const generate = async (config: GenerationConfig, messages: Message[]): Promise<ReadableStream<string>> => {
+  const model = typeof config.model === 'string'
+    ? MODELS[config.model]
+    : config.model
+
+  const firstMessageId = generateId()
+
+  const body = {
+    messages: messages.map((message, i) => ({
+      id: i === 0 ? firstMessageId : generateId(),
+      role: message.role,
+      content: message.content,
+    })),
+    agentMode: {
+      'mode': true,
+      ...model,
+    },
+    id: firstMessageId,
+    previewToken: null,
+    userId: null,
+    codeModelMode: true,
+    trendingAgentMode: {},
+    isMicMode: false,
+    userSystemPrompt: config.systemPrompt,
+    maxTokens: config.maxTokens ?? 1024,
+    playgroundTopP: config.topP ?? null,
+    playgroundTemperature: config.temperature ?? null,
+    'isChromeExt': false,
+    'githubToken': '',
+    'clickedAnswer2': false,
+    'clickedAnswer3': false,
+    'clickedForceWebSearch': false,
+    'visitFromDelta': false,
+    'isMemoryEnabled': false,
+    'mobileClient': false,
+    'userSelectedModel': model.name,
+    'validated': '00f37b34-a166-4efb-bce5-1312d87f2f94',
+    'imageGenerationMode': false,
+    'webSearchModePrompt': false,
+    'deepSearchMode': false,
+    'domains': null,
+    'vscodeClient': false,
+    'codeInterpreterMode': false,
+    'customProfile': {
+      'name': '',
+      'occupation': '',
+      'traits': [],
+      'additionalInfo': '',
+      'enableNewChats': false,
+    },
+    'session': null,
+    'isPremium': false,
   }
-  startChat(init: ChatInit): Chat {
-    return new Chat(this, init)
+
+  const req = new Request('https://www.blackbox.ai/api/chat', {
+    method: 'POST',
+    headers: {
+      ...BASE_HEADERS,
+      'Content-Type': 'appliction/json',
+      //Cookie: `sessionId=${sessionId}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const res = await (config.fetch ?? globalThis.fetch.bind(globalThis))(req)
+  if (!res.ok) {
+    throw new Error(`Received status code ${res.status} ${res.statusText}`)
+  }
+  if (!res.body) {
+    throw new Error('Response body is null.')
+  }
+  return res.body.pipeThrough(new TextDecoderStream())
+}
+
+/**
+ * Wrapper for chatting
+ * @example
+ * ```ts
+ * const chat = new Chat({
+ *   model: 'gemini-2.0-flash'
+ * })
+ * 
+ * await chat.send({ role: 'user', content: 'aaa' })
+ * await chat.sendStream({ role: 'user', content: 'aaa' })
+ * ```
+ */
+export class Chat {
+  #config: GenerationConfig
+  messages: Message[]
+  constructor(config: GenerationConfig, initialMessages: Message[] = []) {
+    this.#config = config
+    this.messages = initialMessages
+  }
+
+  async * sendStream(message: Message | Message[], generationConfig?: GenerationConfig): AsyncGenerator<string, void, unknown> {
+    this.messages = this.messages.concat(message)
+    const config = {
+      ...this.#config,
+      ...generationConfig
+    }
+    const stream = (await generate(config, this.messages)).getReader()
+    while (true) {
+      const { done, value } = await stream.read()
+      if (value) {
+        yield value
+      }
+      if (done) {
+        break
+      }
+    }
+  }
+  async send(message: Message | Message[], generationConfig?: GenerationConfig): Promise<string> {
+    let result = ''
+    for await (const chunk of this.sendStream(message, generationConfig)) {
+      result += chunk
+    }
+    return result
   }
 }

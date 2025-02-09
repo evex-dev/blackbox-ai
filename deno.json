@@ -1,10 +1,10 @@
 {
   "name": "@evex/blackbox-ai",
   "exports": "./mod.ts",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "MIT",
   "tasks": {
-    "dev": "deno run --watch main.ts"
+    "dev": "deno run --watch -N example.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1"

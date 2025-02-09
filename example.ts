@@ -1,13 +1,9 @@
-import { BlackboxAI } from './mod.ts'
+import { Chat } from './mod.ts'
 
-const result = await new BlackboxAI({
-  modelName: 'gpt-4o'
-}).startChat({}).generateWithStream([
-  {
-    role: 'user',
-    content: Deno.args[0]
-  }
-])
-for await (const chunk of result) {
-  Deno.stdout.write(new TextEncoder().encode(chunk))
+const chat = new Chat({
+  model: 'deepseek-r1',
+})
+
+for await (const chunk of chat.sendStream({ role: 'user', content: '何か物語を書いて'})) {
+  await Deno.stdout.write(new TextEncoder().encode(chunk))
 }
