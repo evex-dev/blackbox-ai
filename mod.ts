@@ -5,6 +5,7 @@
  * ```
  * @module
  */
+import type { LanguageModelV1, LanguageModelV1CallOptions } from '@ai-sdk/provider'
 
 const BASE_HEADERS = {
   Origin: 'https://www.blackbox.ai',
@@ -269,7 +270,18 @@ export const generate = async (
   }
   return res.body.pipeThrough(new TextDecoderStream())
 }
-
+function uint8ArrayToDataUrl(uint8Array: Uint8Array, mimeType: string) {
+  // Convert Uint8Array to binary string
+  const binaryString = Array.from(uint8Array)
+      .map(byte => String.fromCharCode(byte))
+      .join('');
+  
+  // Convert binary string to base64
+  const base64String = btoa(binaryString);
+  
+  // Create data URL
+  return `data:${mimeType};base64,${base64String}`;
+}
 /**
  * Wrapper for chatting
  * @example
@@ -281,6 +293,7 @@ export const generate = async (
  * await chat.send({ role: 'user', content: 'aaa' })
  * await chat.sendStream({ role: 'user', content: 'aaa' })
  * ```
+ * @deprecated use AI SDK
  */
 export class Chat {
   #config: GenerationConfig
@@ -319,5 +332,136 @@ export class Chat {
       result += chunk
     }
     return result
+  }
+}
+
+/**
+ * Create blackbox client
+ * @param modelId Model ID
+ * @returns AI Sdk model
+ */
+export function blackbox (modelId: AvailableModel): LanguageModelV1 {
+  const createGenerated = (opts: LanguageModelV1CallOptions) => {
+    return generate({
+      model: modelId
+    }, opts.prompt.flatMap(prompt => {
+      if (prompt.role !== 'user' && prompt.role !== 'assistant') {
+        return []
+      }
+      const texts = prompt.content.filter(part => part.type === 'text').map(part => part.text)
+      const images = prompt.content.filter(part => part.type === 'image').map(part => {
+        if (part.image instanceof URL) {
+          throw new Error('URL is not supported')
+        }
+        if (!part.mimeType) {
+          throw new Error('mimeType is required')
+        }
+        return uint8ArrayToDataUrl(part.image, part.mimeType)
+      })
+      return {
+        role: prompt.role,
+        content: texts.join('\n'),
+        data: images.length === 0 ? undefined : {
+          imagesData: images.map(image => ({
+            filePath: '',
+            contents: image
+          }))
+        }
+      }
+    }))
+  }
+  return {
+    specificationVersion: 'v1',
+    defaultObjectGenerationMode: 'json',
+    supportsStructuredOutputs: false,
+    modelId,
+    provider: 'blackbox',
+    async doGenerate(options) {
+      const reader = (await createGenerated(options)).getReader()
+      let result = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (value) {
+          result += value
+        }
+        if (done) {
+          break
+        }
+      }
+      let reasoning: string | undefined
+      if (result.startsWith('<think>')) {
+        const thinkFinishes = result.indexOf('</think>')
+        if (thinkFinishes !== -1) {
+          reasoning = result.slice(7, thinkFinishes)
+          result = result.slice(thinkFinishes + 8)
+        }
+      }
+      return {
+        finishReason: 'stop',
+        rawCall: {
+          rawPrompt: options.prompt,
+          rawSettings: options
+        },
+        text: result,
+        reasoning,
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+        },
+      }
+    },
+    async doStream(options) {
+      const stream = await createGenerated(options)
+      let isInReasoning = false
+      let text = ''
+      return {
+        rawCall: {
+          rawPrompt: options.prompt,
+          rawSettings: options
+        },
+        stream: stream.pipeThrough(new TransformStream({
+          transform(chunk, controller) {
+            text += chunk
+            if (text.startsWith('<think>')) {
+              isInReasoning = true
+              text = text.slice(7)
+              controller.enqueue({
+                type: 'reasoning',
+                textDelta: text
+              })
+              return
+            }
+            if (isInReasoning && text.includes('</think>')) {
+              const endThinkIndex = text.indexOf('</think>')
+              isInReasoning = false
+              controller.enqueue({
+                type: 'reasoning',
+                textDelta: text.slice(0, endThinkIndex)
+              })
+              controller.enqueue({
+                type: 'text-delta',
+                textDelta: text.slice(endThinkIndex + 8).trimEnd()
+              })
+              text = ''
+              return
+            }
+            controller.enqueue({
+              type: isInReasoning ? 'reasoning' : 'text-delta',
+              textDelta: chunk
+            })
+          },
+          flush(controller) {
+            controller.enqueue({
+              type: 'finish',
+              finishReason: 'stop',
+              usage: {
+                promptTokens: 0,
+                completionTokens: 0,
+              }
+            })
+          }
+        }))
+      }
+    },
   }
 }

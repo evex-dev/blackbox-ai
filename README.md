@@ -17,12 +17,14 @@ npx jsr add @evex/blackbox-ai # npm
 ## Usage
 
 ```ts
-import { generate } from '@evex/blackbox-ai'
+import { streamText } from 'ai'
+import { blackbox } from '@evex/blackbox-ai'
 
-const stream = await generate({ model: 'deepseek-v3' }, [{
-  role: 'user',
-  content: 'Hi, who are you',
-}])
+const stream = streamText({
+  model: blackbox('deepseek-v3'),
+  prompt: 'Hi, who are you',
+}).textStream
+
 for await (const chunk of stream) {
   console.log(chunk)
 }
