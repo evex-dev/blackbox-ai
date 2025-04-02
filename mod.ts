@@ -268,7 +268,11 @@ export const generate = async (
   if (!res.body) {
     throw new Error('Response body is null.')
   }
-  return res.body.pipeThrough(new TextDecoderStream())
+  return res.body.pipeThrough(new TextDecoderStream()).pipeThrough(new TransformStream({
+    transform(chunk, controller) {
+      controller.enqueue(chunk)
+    }
+  }))
 }
 function uint8ArrayToDataUrl(uint8Array: Uint8Array, mimeType: string) {
   // Convert Uint8Array to binary string
@@ -342,8 +346,10 @@ export class Chat {
  */
 export function blackbox (modelId: AvailableModel): LanguageModelV1 {
   const createGenerated = (opts: LanguageModelV1CallOptions) => {
+    const systemPrompt = opts.prompt.filter(prompt => prompt.role === 'system').map(prompt => prompt.content).join('\n')
     return generate({
-      model: modelId
+      model: modelId,
+      systemPrompt
     }, opts.prompt.flatMap(prompt => {
       if (prompt.role !== 'user' && prompt.role !== 'assistant') {
         return []
@@ -436,7 +442,7 @@ export function blackbox (modelId: AvailableModel): LanguageModelV1 {
               isInReasoning = false
               controller.enqueue({
                 type: 'reasoning',
-                textDelta: text.slice(0, endThinkIndex)
+                textDelta: text.slice(0, endThinkIndex),
               })
               controller.enqueue({
                 type: 'text-delta',

@@ -1,11 +1,18 @@
 import { blackbox } from './mod.ts'
-import { streamText } from 'npm:ai'
+import { generateText, streamText } from 'npm:ai'
 
-for await (
-  const chunk of streamText({
-    model: blackbox('QwQ-32B-Preview'),
-    prompt: 'あなたは誰'
-  }).textStream
-) {
-  await Deno.stdout.write(new TextEncoder().encode(chunk))
-}
+const result = await generateText({
+  model: blackbox('deepseek-r1'),
+  messages: [
+    {
+      role: 'system',
+      content: '回答の最後に★つけて'
+    },
+    {
+      role: 'user',
+      content: '458654+58547=?'
+    }
+  ]
+})
+
+console.log(result.text)
