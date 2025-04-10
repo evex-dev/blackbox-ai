@@ -1,7 +1,7 @@
 {
   "name": "@evex/blackbox-ai",
   "exports": "./mod.ts",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "license": "MIT",
   "tasks": {
     "dev": "deno run --watch -N example.ts"
