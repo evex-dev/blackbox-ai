@@ -129,6 +129,10 @@ const MODELS: Record<AvailableModel, Model> = {
     id: 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO',
     name: 'Nous-Hermes-2-Mixtral-8x7B-DPO',
   },
+  'Llama-4-Maverick-17B-128E': {
+    id: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
+    name: 'Llama-4-Maverick-17B-128E',
+  },
 }
 
 /**
