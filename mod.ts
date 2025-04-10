@@ -91,6 +91,7 @@ export type AvailableModel =
   | 'dbrx-instruct'
   | 'QwQ-32B-Preview'
   | 'Nous-Hermes-2-Mixtral-8x7B-DPO'
+  | 'llama-4-maverick-17b-128e'
 
 const MODELS: Record<AvailableModel, Model> = {
   'deepseek-r1': {
@@ -129,7 +130,7 @@ const MODELS: Record<AvailableModel, Model> = {
     id: 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO',
     name: 'Nous-Hermes-2-Mixtral-8x7B-DPO',
   },
-  'Llama-4-Maverick-17B-128E': {
+  'llama-4-maverick-17b-128e': {
     id: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
     name: 'Llama-4-Maverick-17B-128E',
   },
